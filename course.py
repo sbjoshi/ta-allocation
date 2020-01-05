@@ -3,7 +3,7 @@ from enum import Enum
 from collections import OrderedDict
 
 from pysat.solvers import Glucose3
-from pysat.formula import WCNF, CNF, IDPool
+from pysat.formula import WCNF, CNF, IDPool, CNFPlus
 from pysat.pb import *
 
 
@@ -26,6 +26,7 @@ ES16|CS17:>=:2:h (a hard constraint (because of 'h') to select at least 2 studen
 con_string_separator="::"
 con_separator=":"
 group_separator="|"
+soft_weight=1
 
 class tCardType(Enum):
     LESSTHEN=1
@@ -175,9 +176,56 @@ def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses
                         id2varmap[t2]=id2
                     wcnf.append([-id1,-id2])
 
-def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, wcnf: WCNF, constraints: List[tConstraint]):
+
+def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
+    lits=[]
+    for ta in constraint.tas:
+        t1=Tuple(constraint.course_name,ta)
+        if t1 not in id2varmap:
+            assert(false), "Literal "++ constraint.course_name ++ ":"++ta++"should have been created by now"
+        id1=id2varmap(t1)
+        #atleast constraint to be converted to atmostK, so negative literal
+        lits.append(id1)
+    cnf=CardEnc.atleast(lits,encoding=EncType.pairwise,bound=constraint.bound)
+    return cnf
+
+
+
+
+        
+def get_requirement_constraint(idpool:IDPool,id2varmap,course:tCourse)->CNFPlus:
+    lits=[]
+    for ta in course.tas_available:
+        t1=Tuple(course.name,ta)
+        if t1 not in id2varmap:
+            id2varmap[t1]=idpool.id(t1)
+        id1=id2varmap(t1)
+        lits.append(id1)
+    cnf=CardEnc.atleast(lists,encoding=EncType.pairwise,bound=course.num_tas_required)
+    return cnf
+
+
+def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: List[tConstraint]):
     for con in constraints:
+        cnf=get_constraint(idpoo,id2varmap,con)
         t1=Tuple(con.course_name,con.con_str)
+        if t1 not in id2varmap:
+            id2varmap[t1]=idpool(t1)
+        clauses=cnf.clauses.copy()
+        id1=idpool(t1)
+        wcnf=WCNF()
+        for c in clauses:
+            c.append(-id1)
+            wcnf.append(c)
+        wcnf.append(id,soft_weight)
+
+
+
+
+        
+        
+
+
         
 
 
