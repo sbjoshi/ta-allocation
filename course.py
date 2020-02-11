@@ -59,7 +59,8 @@ class tCourse:
 tCourses = Dict[str,tCourse]
 
 
-
+#Compute a dictionary coursename -> list of coursse names where there is a conflict
+# from key to values
 def compute_conflict_courses(courses: tCourses) -> Dict[str,List[str]]:
     conflictCourses=[]
     for c in courses.values():
@@ -69,19 +70,20 @@ def compute_conflict_courses(courses: tCourses) -> Dict[str,List[str]]:
                 continue
             #Now c.start_segment >= cc.start_segment
 
-            if cs.start_segment <= c.end_segment:
-                conCourses.append(cs.name)
+            if cc.start_segment <= c.end_segment:
+                conCourses.append(cc.name)
 
         conflictCourses[c.name]=conCourses
     return conflictCourses
 
+
+## Given a group pattern for students, get the list of students
 def get_students(tas: List[str], gr:str)->List[str]:
         group_list = gr.split(group_separator)
         st = []
         for g in group_list:
             st.extend(list(filter(lambda s: s.startswith(g),tas)))
         return st
-
 
 
 def is_hard_constraint(ctype : str) -> bool:
@@ -93,7 +95,10 @@ def is_hard_constraint(ctype : str) -> bool:
         assert(false), "Found: "++ctype++" Expected 'h' or 's'"
 
 
-
+## Given a hard constraint of type :<=0:h remove all the TAs part of group pattern
+## of this constraints from the tas_available for this course. This is needed
+## to forbid some TAs for a course. e.g., second year students should not TA 
+## for second year courses
 def preprocess_constraints(constraints: List[tConstraint], courses: tCourses) -> List[tConstraint]:
     fconstraints=[]
     for con in constraints:
@@ -119,10 +124,12 @@ def get_constraint_type(ct : str)->tCardType:
     else:
         assert(false), "Found: "++ct++", which is not a valid relational operator"
 
+
+## Parse constraint string in the list of constraints for a course
 def get_course_constraints(course: str,tas: List[str], con_str: str)->List[tConstraint]:
     constraints=[]
     constrings=con_str.split(con_string_separator)
-    for constring in constraints:
+    for constring in constrings:
         (stud_str,ctype,b,hardness)=tuple(constring.split(con_separator))
         c = tConstraint()
         c.course_name=course
@@ -132,8 +139,11 @@ def get_course_constraints(course: str,tas: List[str], con_str: str)->List[tCons
         c.con_str=constring
         c.ishard=is_hard_constraint(hardness)
         constraints.append(c)
+    return constraints
 
 
+
+## Given a CSV initialize courses with name, start_sgment, end_segment, num_tas_required and constraints
 def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constraints: List[tConstraint]):
 #    courses=[]
 #    constraints=[]
@@ -152,7 +162,7 @@ def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constr
 #    return Tuple(courses,constraints)
         
 
-    
+## Read the list of total TAs available    
 def read_ta_list(fname: str)->List[str]:
     tfile = open(fname,"r")
     tas = []
@@ -160,6 +170,8 @@ def read_ta_list(fname: str)->List[str]:
         tas.append(l)
     return tas
 
+
+## Conflicting courses can not share TAs
 def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses, wcnf: WCNF):
     conflict_courses=compute_conflict_courses(courses)
     for course in conflict_courses:
@@ -192,7 +204,7 @@ def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
 
 
 
-        
+## Course should get the num_tas_required (soft constraint)        
 def get_requirement_constraint(idpool:IDPool,id2varmap,course:tCourse)->CNFPlus:
     lits=[]
     for ta in course.tas_available:
@@ -207,7 +219,7 @@ def get_requirement_constraint(idpool:IDPool,id2varmap,course:tCourse)->CNFPlus:
 
 def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: List[tConstraint]):
     for con in constraints:
-        cnf=get_constraint(idpoo,id2varmap,con)
+        cnf=get_constraint(idpool,id2varmap,con)
         t1=Tuple(con.course_name,con.con_str)
         if t1 not in id2varmap:
             id2varmap[t1]=idpool(t1)
