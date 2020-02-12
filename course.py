@@ -5,6 +5,7 @@ from collections import OrderedDict
 from pysat.solvers import Glucose3
 from pysat.formula import WCNF, CNF, IDPool, CNFPlus
 from pysat.pb import *
+from pysat.card import *
 
 
 
@@ -27,6 +28,7 @@ con_string_separator="::"
 con_separator=":"
 group_separator="|"
 soft_weight=1
+is_numta_constraint_hard=True
 
 class tCardType(Enum):
     LESSTHEN=1
@@ -45,7 +47,7 @@ class tConstraint:
         self.bound=0
         self.ishard=True
     def __repr__(self):
-        return "Course: "++self.course_name++" "++self.con_str
+        return "Course: " + self.course_name + " " + self.con_str
 
 
 class tCourse:
@@ -55,6 +57,8 @@ class tCourse:
         self.end_segment=6
         self.num_tas_required=0
         self.tas_available=[]
+    def __repr__(self):
+        return "Course: "+self.name+" from " + self.start_segment + " to "+self.end_segment
 
 tCourses = Dict[str,tCourse]
 
@@ -92,7 +96,7 @@ def is_hard_constraint(ctype : str) -> bool:
     elif ctype == "s":
         return False
     else:
-        assert(false), "Found: "++ctype++" Expected 'h' or 's'"
+        assert(False), "Found: "+ctype+" Expected 'h' or 's'"
 
 
 ## Given a hard constraint of type :<=0:h remove all the TAs part of group pattern
@@ -112,7 +116,7 @@ def preprocess_constraints(constraints: List[tConstraint], courses: tCourses) ->
    
 def get_constraint_type(ct : str)->tCardType:
     if ct == "<":
-        return tConTpe.LESSTHEN
+        return tCardType.LESSTHEN
     elif ct == "<=":
         return tCardType.LESSOREQUALS
     elif ct==">":
@@ -122,7 +126,7 @@ def get_constraint_type(ct : str)->tCardType:
     elif ct=="=":
         return tCardType.EQUALS
     else:
-        assert(false), "Found: "++ct++", which is not a valid relational operator"
+        assert(False), "Found: "+ct+", which is not a valid relational operator"
 
 
 ## Parse constraint string in the list of constraints for a course
@@ -134,10 +138,30 @@ def get_course_constraints(course: str,tas: List[str], con_str: str)->List[tCons
         c = tConstraint()
         c.course_name=course
         c.tas=get_students(tas,stud_str)
-        c.type=get_constraint_type(ctype)
-        c.bound=b
-        c.con_str=constring
         c.ishard=is_hard_constraint(hardness)
+        cardtype = get_constraint_type(ctype)
+        if cardtype == tCardType.LESSTHEN:
+            b = int(b)-1
+            c.type = tCardType.LESSOREQUALS
+        elif cardtype == tCardType.GREATERTHEN:
+            b = int(b)+1
+            c.type=tCardType.GREATEROREQUALS
+        elif cardtype == tCardType.EQUALS:
+            c.type=tCardType.GREATEROREQUALS
+            c.bound=int(b)
+            c1 = tConstraint()
+            c1.course_name=course
+            c1.tas=c.tas.copy()
+            c1.type=tCardType.LESSOREQUALS
+            c1.ishard=c.ishard
+            c1.bound=int(b)
+            c1.con_str=constring+"<="
+            constraints.append(c1)
+        else :
+            c.type = cardtype
+            c.bound=int(b)
+
+        c.con_str=constring
         constraints.append(c)
     return constraints
 
@@ -158,6 +182,13 @@ def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constr
         course.tas_available=tas.copy()
         courses.append(course)
         cons = get_course_constraints(course.name,tas,fields[4])
+        numta_constraint = tConstraint()
+        numta_constraint.course_name=fields[0]
+        numta_constraint.bound=course.num_tas_required
+        numta_constraint.ishard=is_numta_constraint_hard
+        numta_constraint.tas=course.tas_available.copy()
+        numta_constraint.type=tCardType.GREATEROREQUALS
+        constraints.append(numta_constraint)
         constraints.extend(cons)
 #    return Tuple(courses,constraints)
         
@@ -194,17 +225,21 @@ def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
     for ta in constraint.tas:
         t1=Tuple(constraint.course_name,ta)
         if t1 not in id2varmap:
-            assert(false), "Literal "++ constraint.course_name ++ ":"++ta++"should have been created by now"
+            assert(False), "Literal "+ constraint.course_name + ":"+ta+"should have been created by now"
         id1=id2varmap(t1)
         #atleast constraint to be converted to atmostK, so negative literal
         lits.append(id1)
-    cnf=CardEnc.atleast(lits,encoding=EncType.pairwise,bound=constraint.bound)
+        if constraint.type == tCardType.GREATEROREQUALS :
+            cnf=CardEnc.atleast(lits,encoding=EncType.pairwise,bound=constraint.bound)
+        elif constraint.type == tCardType.LESSOREQUALS :
+            cnf = CardEnc.atmost(lits,encoding=EncType.pairwise,bound=constraint.bound)
+            
     return cnf
 
 
 
-
-## Course should get the num_tas_required (soft constraint)        
+# Course should get the num_tas_required (soft constraint)        
+'''
 def get_requirement_constraint(idpool:IDPool,id2varmap,course:tCourse)->CNFPlus:
     lits=[]
     for ta in course.tas_available:
@@ -213,23 +248,29 @@ def get_requirement_constraint(idpool:IDPool,id2varmap,course:tCourse)->CNFPlus:
             id2varmap[t1]=idpool.id(t1)
         id1=id2varmap(t1)
         lits.append(id1)
-    cnf=CardEnc.atleast(lists,encoding=EncType.pairwise,bound=course.num_tas_required)
+    cnf=CardEnc.atleast(lits,encoding=EncType.pairwise,bound=course.num_tas_required)
     return cnf
+'''
 
 
 def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: List[tConstraint]):
     for con in constraints:
         cnf=get_constraint(idpool,id2varmap,con)
-        t1=Tuple(con.course_name,con.con_str)
-        if t1 not in id2varmap:
-            id2varmap[t1]=idpool(t1)
+        if not con.ishard:
+            t1=Tuple(con.course_name,con.con_str)
+            if t1 not in id2varmap:
+                id2varmap[t1]=idpool(t1)
+                id1=idpool(t1)
+
         clauses=cnf.clauses.copy()
-        id1=idpool(t1)
         wcnf=WCNF()
         for c in clauses:
-            c.append(-id1)
+            if not con.ishard :
+                c.append(-id1)
+
             wcnf.append(c)
-        wcnf.append(id,soft_weight)
+        if not con.ishard:
+            wcnf.append(id,soft_weight)
 
 
 
