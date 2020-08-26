@@ -6,6 +6,7 @@ from pysat.solvers import Glucose3
 from pysat.formula import WCNF, CNF, IDPool, CNFPlus
 from pysat.pb import *
 from pysat.card import *
+import sys
 
 
 
@@ -47,7 +48,7 @@ class tConstraint:
         self.bound=0
         self.ishard=True
     def __repr__(self):
-        return "Course: " + self.course_name + " " + self.con_str
+        return "Constraint: " + self.course_name + " " + str(self.type) + " " + str(self.bound) + " " + ("HARD" if self.ishard else "SOFT") +  (' '.join([str(elem) for elem in self.tas]))
 
 
 class tCourse:
@@ -58,25 +59,25 @@ class tCourse:
         self.num_tas_required=0
         self.tas_available=[]
     def __repr__(self):
-        return "Course: "+self.name+" from " + self.start_segment + " to "+self.end_segment
+        return "Course: "+self.name+" from " + str(self.start_segment) + " to "+str(self.end_segment)
 
 tCourses = Dict[str,tCourse]
 
+# are two given courses conflicting with each other
+# test overlap of start/end segments
+def are_conflicting_courses(c1: tCourse, c2: tCourse)->bool:
+    if(c1.name>=c2.name): # use lexigraphic order to avoid symmetry
+        return False
+    if(c1.end_segment < c2.start_segment or c2.end_segment < c1.start_segment):
+        return False
+    return True
 
 #Compute a dictionary coursename -> list of coursse names where there is a conflict
 # from key to values
 def compute_conflict_courses(courses: tCourses) -> Dict[str,List[str]]:
-    conflictCourses=[]
+    conflictCourses=dict()
     for c in courses.values():
-        conCourses=[]
-        for cc in courses.values():
-            if c == cc or c.start_segment > cc.start_segment:
-                continue
-            #Now c.start_segment >= cc.start_segment
-
-            if cc.start_segment <= c.end_segment:
-                conCourses.append(cc.name)
-
+        conCourses = list(map((lambda x: x.name),list(filter((lambda cc: are_conflicting_courses(c,cc)),courses.values()))))
         conflictCourses[c.name]=conCourses
     return conflictCourses
 
@@ -107,8 +108,9 @@ def preprocess_constraints(constraints: List[tConstraint], courses: tCourses) ->
     fconstraints=[]
     for con in constraints:
         if con.bound == 0 and con.type == tCardType.LESSOREQUALS and con.ishard==True:
+            newcon = con
             reduced_list = filter(lambda j: j not in con.tas, courses[con.course_name].tas_available)
-            courses[con.course_name]=reduced_list
+            newcon.tas = reduced_list
         else:
             fconstraints.append(con)
     return fconstraints
@@ -173,21 +175,24 @@ def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constr
 #    constraints=[]
     cfile = open(fname,"r")
     for l in cfile:
-        fields=l.split(",")
+        if (len(l.strip())==0):
+            return
+        fields=l.strip().split(",")
         course=tCourse()
         course.name=fields[0]
         course.start_segment = int(fields[1])
         course.end_segment=int(fields[2])
         course.num_tas_required=int(fields[3])
         course.tas_available=tas.copy()
-        courses.append(course)
-        cons = get_course_constraints(course.name,tas,fields[4])
+        courses[course.name]=course
+        cons = [] if len(fields[4])==0 else get_course_constraints(course.name,tas,fields[4])
         numta_constraint = tConstraint()
         numta_constraint.course_name=fields[0]
         numta_constraint.bound=course.num_tas_required
         numta_constraint.ishard=is_numta_constraint_hard
         numta_constraint.tas=course.tas_available.copy()
         numta_constraint.type=tCardType.GREATEROREQUALS
+        numta_constraint.con_str="ALL:>=:"+str(numta_constraint.bound)+":"+("h" if numta_constraint.ishard else "s")
         constraints.append(numta_constraint)
         constraints.extend(cons)
 #    return Tuple(courses,constraints)
@@ -198,19 +203,20 @@ def read_ta_list(fname: str)->List[str]:
     tfile = open(fname,"r")
     tas = []
     for l in tfile:
-        tas.append(l)
+        tas.append(l.strip())
     return tas
 
 
 ## Conflicting courses can not share TAs
-def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses, wcnf: WCNF):
+def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses):
+    wcnf=WCNF()
     conflict_courses=compute_conflict_courses(courses)
-    for course in conflict_courses:
+    for course in conflict_courses.keys():
         for ccourse in conflict_courses[course]:
             for t in courses[course].tas_available:
                 if t in courses[ccourse].tas_available:
-                    t1=Tuple(course,t)
-                    t2=Tuple(ccourse,t)
+                    t1=tuple((course,t))
+                    t2=tuple((ccourse,t))
                     id1=idpool.id(t1)
                     id2=idpool.id(t2)
                     if t1 not in id2varmap.keys():
@@ -218,22 +224,24 @@ def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses
                     if t2 not in id2varmap.keys():
                         id2varmap[t2]=id2
                     wcnf.append([-id1,-id2])
+    return wcnf
 
 
 def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
     lits=[]
     for ta in constraint.tas:
-        t1=Tuple(constraint.course_name,ta)
-        if t1 not in id2varmap:
-            assert(False), "Literal "+ constraint.course_name + ":"+ta+"should have been created by now"
-        id1=id2varmap(t1)
+        t1=tuple((constraint.course_name,ta))
+        if t1 not in id2varmap.keys():
+            id1=idpool.id(t1)
+            id2varmap[t1]=id1
+        else:
+            id1=id2varmap[t1]
         #atleast constraint to be converted to atmostK, so negative literal
         lits.append(id1)
         if constraint.type == tCardType.GREATEROREQUALS :
             cnf=CardEnc.atleast(lits,encoding=EncType.pairwise,bound=constraint.bound)
         elif constraint.type == tCardType.LESSOREQUALS :
             cnf = CardEnc.atmost(lits,encoding=EncType.pairwise,bound=constraint.bound)
-            
     return cnf
 
 
@@ -253,33 +261,43 @@ def get_requirement_constraint(idpool:IDPool,id2varmap,course:tCourse)->CNFPlus:
 '''
 
 
-def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: List[tConstraint]):
+def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: List[tConstraint])->WCNF:
+    wcnf=gen_constraint_conflict_courses(idpool,id2varmap,courses)
     for con in constraints:
         cnf=get_constraint(idpool,id2varmap,con)
         if not con.ishard:
-            t1=Tuple(con.course_name,con.con_str)
+            t1=tuple((con.course_name,con.con_str))
             if t1 not in id2varmap:
                 id2varmap[t1]=idpool(t1)
-                id1=idpool(t1)
-
-        clauses=cnf.clauses.copy()
-        wcnf=WCNF()
-        for c in clauses:
-            if not con.ishard :
+            id1=idpool(t1)
+            clauses=cnf.clauses.copy()
+            for c in clauses:
                 c.append(-id1)
-
             wcnf.append(c)
-        if not con.ishard:
             wcnf.append(id,soft_weight)
+        else:
+            wcnf.extend(cnf.clauses().copy())
+    return wcnf
+    
 
 
 
-
-        
-        
-
-
-        
+print(sys.argv)
+talist=read_ta_list(sys.argv[1])
+print(talist)        
+courses_dict=dict()
+constraint_list: List[tConstraint]=[]
+read_course_constraints(sys.argv[2],talist,courses_dict,constraint_list)
+print(courses_dict)
+constraint_list=preprocess_constraints(constraint_list,courses_dict)
+print(constraint_list)
+#print(compute_conflict_courses(courses_dict))
+vpool=IDPool()
+id2varmap=dict()
+wcnf1=gen_constraints(vpool,id2varmap,courses_dict,constraint_list)
+fm=FM(wcnf1)        
+result=fm.compute()
+print(fm.model)
 
 
 
