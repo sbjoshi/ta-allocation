@@ -4,8 +4,8 @@ from collections import OrderedDict
 
 from pysat.solvers import Glucose3
 from pysat.formula import WCNF, CNF, IDPool, CNFPlus
-from pysat.pb import *
-from pysat.card import *
+from pysat.card import CardEnc, EncType
+from pysat.examples.lsu import LSU
 import sys
 
 
@@ -29,7 +29,7 @@ con_string_separator="::"
 con_separator=":"
 group_separator="|"
 soft_weight=1
-is_numta_constraint_hard=True
+is_numta_constraint_hard=False
 
 class tCardType(Enum):
     LESSTHEN=1
@@ -177,7 +177,7 @@ def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constr
     for l in cfile:
         if (len(l.strip())==0):
             return
-        fields=l.strip().split(",")
+        fields=l.strip().lower().split(",")
         course=tCourse()
         course.name=fields[0]
         course.start_segment = int(fields[1])
@@ -203,12 +203,15 @@ def read_ta_list(fname: str)->List[str]:
     tfile = open(fname,"r")
     tas = []
     for l in tfile:
-        tas.append(l.strip())
+        s=l.strip()
+        if (len(s)==0):
+            continue
+        tas.append(s.lower())
     return tas
 
 
 ## Conflicting courses can not share TAs
-def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses):
+def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses)->WCNF:
     wcnf=WCNF()
     conflict_courses=compute_conflict_courses(courses)
     for course in conflict_courses.keys():
@@ -236,12 +239,16 @@ def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
             id2varmap[t1]=id1
         else:
             id1=id2varmap[t1]
-        #atleast constraint to be converted to atmostK, so negative literal
         lits.append(id1)
-        if constraint.type == tCardType.GREATEROREQUALS :
-            cnf=CardEnc.atleast(lits,encoding=EncType.pairwise,bound=constraint.bound)
-        elif constraint.type == tCardType.LESSOREQUALS :
-            cnf = CardEnc.atmost(lits,encoding=EncType.pairwise,bound=constraint.bound)
+
+    if constraint.type == tCardType.GREATEROREQUALS :
+        if (constraint.bound==1):
+            cnf=CNFPlus()
+            cnf.append(lits)
+        else:
+            cnf=CardEnc.atleast(lits,bound=constraint.bound)
+    elif constraint.type == tCardType.LESSOREQUALS :
+        cnf = CardEnc.atmost(lits,bound=constraint.bound)
     return cnf
 
 
@@ -268,15 +275,19 @@ def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: Li
         if not con.ishard:
             t1=tuple((con.course_name,con.con_str))
             if t1 not in id2varmap:
-                id2varmap[t1]=idpool(t1)
-            id1=idpool(t1)
+                id2varmap[t1]=idpool.id(t1)
+            id1=idpool.id(t1)
             clauses=cnf.clauses.copy()
             for c in clauses:
                 c.append(-id1)
-            wcnf.append(c)
-            wcnf.append(id,soft_weight)
+                wcnf.append(c)
+            c=[]
+            c.append(id1)
+            wcnf.append(c,soft_weight)
         else:
-            wcnf.extend(cnf.clauses().copy())
+            clauses=cnf.clauses.copy()
+            for c in clauses:
+                wcnf.append(c)
     return wcnf
     
 
@@ -295,12 +306,17 @@ print(constraint_list)
 vpool=IDPool()
 id2varmap=dict()
 wcnf1=gen_constraints(vpool,id2varmap,courses_dict,constraint_list)
-fm=FM(wcnf1)        
-result=fm.compute()
-print(fm.model)
-
-
-
+lsu=LSU(wcnf1)
+res = lsu.solve()
+if not res:
+    print("Hard constraints could not be satisfied")
+else:
+    print(lsu.cost)
+    model=list(lsu.model)
+    pos_lits=list(filter((lambda x: x>0),model))
+    for id in id2varmap.values():
+        if id in pos_lits:
+            print(vpool.obj(id))
 
 
 
