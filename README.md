@@ -14,7 +14,7 @@ Constraint String format is
 ``ES16|CS17:>=:2:s::CS16:<=:0:h`` (a soft constraint (because of ``'s'``) to select at least 2 students from a group of students whose roll numbers
 start with either ``ES16`` or ``CS17`` and a hard constraint to not allocate any TA whose roll number starts with ``CS16``.
 
-# Dependancies
+# Dependencies
 
 * PySAT: [https://pysathq.github.io/](https://pysathq.github.io/)
 
