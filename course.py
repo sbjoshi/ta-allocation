@@ -29,7 +29,7 @@ con_string_separator="::"
 con_separator=":"
 group_separator="|"
 soft_weight=1
-is_numta_constraint_hard=False
+is_numta_constraint_hard=True
 
 class tCardType(Enum):
     LESSTHEN=1
@@ -246,9 +246,9 @@ def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
             cnf=CNFPlus()
             cnf.append(lits)
         else:
-            cnf=CardEnc.atleast(lits,bound=constraint.bound)
+            cnf=CardEnc.atleast(lits,vpool=idpool,bound=constraint.bound)
     elif constraint.type == tCardType.LESSOREQUALS :
-        cnf = CardEnc.atmost(lits,bound=constraint.bound)
+        cnf = CardEnc.atmost(lits,vpool=idpool,bound=constraint.bound)
     return cnf
 
 
