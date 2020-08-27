@@ -1,4 +1,11 @@
 #!/usr/bin/python3
+
+#
+# Copyright (c) 2020 Saurabh Joshi, Department of CSE, IIT Hyderabad
+#
+#
+
+
 from typing import List, Tuple, Dict
 from enum import Enum
 from collections import OrderedDict
