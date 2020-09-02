@@ -39,7 +39,7 @@ ES16|CS17:>=:2:h (a hard constraint (because of 'h') to select at least 2 studen
 
 #global
 #separate multile constraint using this string
-con_string_separator="::"
+con_string_separator="&&"
 #separator string within a constraint
 con_separator=":"
 #separator string from multiple group of students
@@ -226,7 +226,7 @@ def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constr
 
     Example:
 
-    cs2433,1,3,5,cs17:<=:0:h::cs16:>=:2:s
+    cs2433,1,3,5,cs17:<=:0:h&&cs16:>=:2:s
 
     Indicating that cs2433 starts from segment 1 and goes on till segment 3
     It MUST NOT be assigned a TA from cs17 and at least 2 TAs should be given from cs16
@@ -343,15 +343,15 @@ def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: Li
 
 
 
-print(sys.argv)
+#print(sys.argv)
 talist=read_ta_list(sys.argv[1])
-print(talist)        
+#print(talist)        
 courses_dict=dict()
 constraint_list: List[tConstraint]=[]
 read_course_constraints(sys.argv[2],talist,courses_dict,constraint_list)
-print(courses_dict)
+#print(courses_dict)
 constraint_list=preprocess_constraints(constraint_list,courses_dict)
-print(constraint_list)
+#print(constraint_list)
 #print(compute_conflict_courses(courses_dict))
 vpool=IDPool()
 id2varmap=dict()
@@ -361,12 +361,23 @@ res = lsu.solve()
 if not res:
     print("Hard constraints could not be satisfied")
 else:
-    print(lsu.cost)
+#    print(lsu.cost)
     model=list(lsu.model)
     pos_lits=list(filter((lambda x: x>0),model))
+    ta_allocation=dict()
     for id in id2varmap.values():
         if id in pos_lits:
-            print(vpool.obj(id))
+            (course_name,ta)=vpool.obj(id)
+            if course_name not in ta_allocation.keys():
+                talist=[]
+                ta_allocation[course_name]=talist
+            
+            ta_allocation[course_name].append(ta)
+
+    
+    for course_name in ta_allocation.keys():
+        print(course_name," : ",ta_allocation[course_name])
+            
 
 
 
