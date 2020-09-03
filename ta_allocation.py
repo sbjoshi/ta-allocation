@@ -132,7 +132,7 @@ def get_students(tas: List[str], gr:str)->List[str]:
     group_list = gr.split(group_separator)
     st = []
     for g in group_list:
-        st.extend(list(filter(lambda s: s.startswith(g),tas)))
+        st.extend(list(filter(lambda s: g in s,tas)))
     return st
 
 
