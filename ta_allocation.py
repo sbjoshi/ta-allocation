@@ -30,7 +30,7 @@ CourseID, StartSegment, EndSegment, NumTAsRequired,ConstraintString
 
 Constraint String format is
 
-ES16|CS17:>=:2:h (a hard constraint (because of 'h') to select at least 2 students from a group of students whose role numbers start with either ES16 or CS17
+ES16|CS17:>=:2:h (a hard constraint (because of 'h') to select at least 2 students from a group of students whose role numbers contain either ES16 or CS17
 
 
 
@@ -79,7 +79,7 @@ class tConstraint:
         self.bound=0
         self.ishard=True
     def __repr__(self):
-        return "Constraint: " + self.course_name + " " + str(self.type) + " " + str(self.bound) + " " + ("HARD" if self.ishard else "SOFT") +  (' '.join([str(elem) for elem in self.tas]))
+        return "Constraint: " + self.course_name + ":" + str(self.type) + " " + str(self.bound) + " " + ("HARD" if self.ishard else "SOFT") +  (' '.join([str(elem) for elem in self.tas]))
 
 
 class tCourse:
@@ -252,7 +252,7 @@ def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constr
         numta_constraint.ishard=is_numta_constraint_hard
         numta_constraint.tas=course.tas_available.copy()
         numta_constraint.type=tCardType.GREATEROREQUALS
-        numta_constraint.con_str="ALL:>=:"+str(numta_constraint.bound)+":"+("h" if numta_constraint.ishard else "s")
+        numta_constraint.con_str=str(numta_constraint.course_name)+":ALL:>=:"+str(numta_constraint.bound)+":"+("h" if numta_constraint.ishard else "s")
         constraints.append(numta_constraint)
         constraints.extend(cons)
 #    return Tuple(courses,constraints)
@@ -290,8 +290,38 @@ def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses
     return wcnf
 
 
+def validate_constraint(constraint: tConstraint)->bool:
+    if(constraint.type==tCardType.GREATEROREQUALS):
+        if (constraint.bound<=0):
+            print("Bound for "+constraint.con_str+" is "+str(constraint.bound),file=sys.stderr)
+            print("\n Bound too low",file=sys.stderr)
+            sys.exit("\nIllegal bound\n")
+        if (constraint.bound>len(constraint.tas)):
+            print("\nBound for "+constraint.con_tr+" is "+str(constraint.bound),file=sys.stderr)
+            print("\nBound is more than TAs available for this constraint",file=sys.stderr)
+            print("\nList of available TAs: ")
+            print(constraint.tas)
+            sys.exit("\n Lower Bound of the constraint too high")
+        return True
+    if(constraint.type==tCardType.LESSOREQUALS):
+        if(constraint.bound<0):
+            print("\nBound for constraint is"+str(constraint.bound),file=sys.stderr)
+            print("\n Bound too low",file=sys.stderr)
+            sys.exit("\nIllegal Bound")
+        if(constraint.bound>len(constraint.tas)):
+            print("\nBound for constraint is"+str(constraint.bound),file=sys.stderr)
+            print("\nUpper bound is way more than TAs available for this constraint",file=sys.stderr)
+            print("\nBound too high",file=sys.stderr)
+        return True
+            
+
+
+
+
+
 def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
     """ Generate formula for a given cardinality constraint"""
+    validate_constraint(constraint)
     lits=[]
     for ta in constraint.tas:
         t1=tuple((constraint.course_name,ta))
@@ -306,10 +336,15 @@ def get_constraint(idpool:IDPool, id2varmap, constraint: tConstraint)->CNFPlus:
         if (constraint.bound==1):
             cnf=CNFPlus()
             cnf.append(lits)
-        else:
-            cnf=CardEnc.atleast(lits,vpool=idpool,bound=constraint.bound)
+        elif (constraint.bound>len(lits)):
+            msg="Num TAs available for constraint:"+constraint.con_str+"is more than the bound in the constraint. \
+            Changing the bound to "+str(len(lits))+".\n"
+            print(msg,file=sys.stderr)
+            constraint.bound=len(lits)
+
+        cnf=CardEnc.atleast(lits,vpool=idpool,bound=constraint.bound)
     elif constraint.type == tCardType.LESSOREQUALS :
-        cnf = CardEnc.atmost(lits,vpool=idpool,bound=constraint.bound)
+                cnf = CardEnc.atmost(lits,vpool=idpool,bound=constraint.bound)
     return cnf
 
 
@@ -356,6 +391,9 @@ constraint_list=preprocess_constraints(constraint_list,courses_dict)
 vpool=IDPool()
 id2varmap=dict()
 wcnf1=gen_constraints(vpool,id2varmap,courses_dict,constraint_list)
+#for c in wcnf1.soft:
+#    for l in c:
+#        print(vpool.obj(l))
 lsu=LSU(wcnf1)
 res = lsu.solve()
 if not res:
@@ -364,19 +402,35 @@ else:
 #    print(lsu.cost)
     model=list(lsu.model)
     pos_lits=list(filter((lambda x: x>0),model))
+    unsatisfied_constraints=[]
     ta_allocation=dict()
+    tas_allocated=[]
     for id in id2varmap.values():
         if id in pos_lits:
             (course_name,ta)=vpool.obj(id)
+            tas_allocated.append(ta)
             if course_name not in ta_allocation.keys():
                 talist=[]
                 ta_allocation[course_name]=talist
             
             ta_allocation[course_name].append(ta)
+        else:
+            (course_name,ta)=vpool.obj(id)
+            if ":" in ta:
+                unsatisfied_constraints.append(ta)
+
 
     
     for course_name in ta_allocation.keys():
         print(course_name," : ",ta_allocation[course_name])
+
+    if len(unsatisfied_constraints)>0:
+        print("\n Following soft constraints could not be satisfied: \n")
+        print(unsatisfied_constraints)
+    tas_not_allocated=[t for t in talist if t not in tas_allocated]
+    if len(tas_not_allocated)>0:
+        print("\nTAs who are not assigned any TA duty: ")
+        print(tas_not_allocated)
             
 
 
