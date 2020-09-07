@@ -206,13 +206,13 @@ def get_course_constraints(course: str,tas: List[str], con_str: str)->List[tCons
             c1.type=tCardType.LESSOREQUALS
             c1.ishard=c.ishard
             c1.bound=int(b)
-            c1.con_str=constring+"<="
+            c1.con_str=c1.course_name+"->"+constring+"<="
             constraints.append(c1)
         else :
             c.type = cardtype
             c.bound=int(b)
 
-        c.con_str=constring
+        c.con_str=c.course_name+"->"+constring
         constraints.append(c)
     return constraints
 
@@ -413,7 +413,8 @@ else:
                 talist=[]
                 ta_allocation[course_name]=talist
             
-            ta_allocation[course_name].append(ta)
+            if ":" not in ta:
+                ta_allocation[course_name].append(ta)
         else:
             (course_name,ta)=vpool.obj(id)
             if ":" in ta:
