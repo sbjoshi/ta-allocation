@@ -1,0 +1,7 @@
+CS3510,5,6,7,cs19btech|es19btech:<=:0:h&&cs17btech:>=:2:s&&cs18btech:>=:3:s
+CS6013,1,6,6,CS19MTECH|CS18RESCH|CS17RESCH|CS16RESCH:>=:6:h
+CS6350,3,3,3,cs18btech:<=:0:h&&cs19btech:<=:0:h
+ID1303,3,6,5,cs19btech|es19btech:<=:0:h&&cs17btech|es17btech:>=:4:s&&cs18btech|es18btech:>=:1:s
+CS2323,1,4,10,cs17btech|cs18btech|cs19mtech:>=:6:h&&cs20mtech|cs20resch:>=:4:s&&cs19btech:<=:0:h
+CS2233,1,6,16,CS19BTECH:<=:0:h&&CS17BTECH|CS18BTECH:>=:10:h&&CS19MTECH|CS18RESCH|CS19RESCH:>=:5:s
+CS5590,1,6,3,cs17btech11022|cs17btech11049|cs17btech11025|cs17btech|es17btech:>=:3:s&&cs19btech|es19btech:<=:0:h&&cs18btech|es18btech:<=:0:h
