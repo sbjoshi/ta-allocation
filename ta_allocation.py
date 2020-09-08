@@ -400,7 +400,7 @@ courses_dict=dict()
 constraint_list: List[tConstraint]=[]
 read_course_constraints(sys.argv[2],talist,courses_dict,constraint_list)
 #print(courses_dict)
-constraint_list=preprocess_constraints(constraint_list,courses_dict)
+#constraint_list=preprocess_constraints(constraint_list,courses_dict)
 constraint_list.extend(gen_num_ta_required_constraints(courses_dict))
 vpool=IDPool()
 id2varmap=dict()
@@ -437,7 +437,7 @@ else:
 
     
     for course_name in ta_allocation.keys():
-        print(course_name," : ",ta_allocation[course_name])
+        print(course_name," : ",str(len(ta_allocation[course_name]))," : " ,ta_allocation[course_name])
 
     if len(unsatisfied_constraints)>0:
         print("\n Following soft constraints could not be satisfied: \n")
