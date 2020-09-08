@@ -153,10 +153,11 @@ def preprocess_constraints(constraints: List[tConstraint], courses: tCourses) ->
     """
     fconstraints=[]
     for con in constraints:
-        if con.bound == 0 and con.type == tCardType.LESSOREQUALS and con.ishard==True:
-            newcon = con
-            reduced_list = filter(lambda j: j not in con.tas, courses[con.course_name].tas_available)
-            newcon.tas = reduced_list
+        if (len(con.tas)==0):
+            continue
+        elif con.bound == 0 and con.type == tCardType.LESSOREQUALS and con.ishard==True :
+            reduced_list = list(filter(lambda j: j not in con.tas, courses[con.course_name].tas_available))
+            courses[con.course_name].tas_available=reduced_list
         else:
             fconstraints.append(con)
     return fconstraints
@@ -206,14 +207,15 @@ def get_course_constraints(course: str,tas: List[str], con_str: str)->List[tCons
             c1.type=tCardType.LESSOREQUALS
             c1.ishard=c.ishard
             c1.bound=int(b)
-            c1.con_str=c1.course_name+"->"+constring+"<="
+            c1.con_str=constring+"<="
             constraints.append(c1)
         else :
             c.type = cardtype
             c.bound=int(b)
 
-        c.con_str=c.course_name+"->"+constring
-        constraints.append(c)
+        c.con_str=constring
+        if (len(c.tas)>0):
+            constraints.append(c)
     return constraints
 
 
@@ -358,7 +360,7 @@ def gen_constraints(idpool: IDPool, id2varmap, courses:tCourses, constraints: Li
             level constraint specified by the user was satisfied
         """
         if not con.ishard:
-            t1=tuple((con.course_name,con.con_str))
+            t1=tuple((con.course_name, con.course_name+"->"+con.con_str ))
             if t1 not in id2varmap:
                 id2varmap[t1]=idpool.id(t1)
             id1=idpool.id(t1)
