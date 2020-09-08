@@ -9,8 +9,8 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal"
-            "args"   : ["test/stulist.csv", "test/courses.csv"]
+            "console": "integratedTerminal",
+            "args"   : ["test/talist_julnov2020.csv","test/course_constraints_julnov2020.csv"]
         }
     ]
 }
