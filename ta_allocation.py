@@ -248,14 +248,14 @@ def read_course_constraints(fname: str,tas: List[str], courses: tCourses, constr
         course.tas_available=tas.copy()
         courses[course.name]=course
         cons = [] if len(fields[4])==0 else get_course_constraints(course.name,tas,fields[4])
-        numta_constraint = tConstraint()
-        numta_constraint.course_name=fields[0]
-        numta_constraint.bound=course.num_tas_required
-        numta_constraint.ishard=is_numta_constraint_hard
-        numta_constraint.tas=course.tas_available.copy()
-        numta_constraint.type=tCardType.GREATEROREQUALS
-        numta_constraint.con_str=str(numta_constraint.course_name)+":ALL:>=:"+str(numta_constraint.bound)+":"+("h" if numta_constraint.ishard else "s")
-        constraints.append(numta_constraint)
+#        numta_constraint = tConstraint()
+ #       numta_constraint.course_name=fields[0]
+  #      numta_constraint.bound=course.num_tas_required
+   #     numta_constraint.ishard=is_numta_constraint_hard
+    #    numta_constraint.tas=course.tas_available.copy()
+     #   numta_constraint.type=tCardType.GREATEROREQUALS
+#        numta_constraint.con_str=str(numta_constraint.course_name)+":ALL:>=:"+str(numta_constraint.bound)+":"+("h" if numta_constraint.ishard else "s")
+#        constraints.append(numta_constraint)
         constraints.extend(cons)
 #    return Tuple(courses,constraints)
         
@@ -270,6 +270,19 @@ def read_ta_list(fname: str)->List[str]:
             continue
         tas.append(s.lower())
     return tas
+
+def gen_num_ta_required_constraints(courses:tCourses)->List[tConstraint]:
+    num_ta_constraints=[]
+    for c in courses.values():
+        con=tConstraint()
+        con.course_name=c.name
+        con.bound=c.num_tas_required
+        con.type=tCardType.GREATEROREQUALS
+        con.tas=c.tas_available.copy()
+        con.ishard=is_numta_constraint_hard
+        con.con_str="ALL:>=:"+str(con.bound)+":"+("h" if con.ishard else "s")
+        num_ta_constraints.append(con)
+    return num_ta_constraints
 
 
 def gen_constraint_conflict_courses(idpool: IDPool, id2varmap, courses: tCourses)->WCNF:
@@ -388,8 +401,7 @@ constraint_list: List[tConstraint]=[]
 read_course_constraints(sys.argv[2],talist,courses_dict,constraint_list)
 #print(courses_dict)
 constraint_list=preprocess_constraints(constraint_list,courses_dict)
-#print(constraint_list)
-#print(compute_conflict_courses(courses_dict))
+constraint_list.extend(gen_num_ta_required_constraints(courses_dict))
 vpool=IDPool()
 id2varmap=dict()
 wcnf1=gen_constraints(vpool,id2varmap,courses_dict,constraint_list)
